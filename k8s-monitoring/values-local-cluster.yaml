@@ -1,0 +1,94 @@
+cluster:
+  name: local_cluster
+externalServices:
+  prometheus:
+    host: <put URL from grafana stack page here>
+    basicAuth:
+      username: <put username from grafana stack page here>
+      password: <put password from grafana stack page here>
+  loki:
+    host: <put URL from grafana stack page here>
+    basicAuth:
+      username: <put username from grafana stack page here>
+      password: <put password from grafana stack page here>
+  tempo:
+    host: <put URL from grafana stack page here>
+    basicAuth:
+      username: <put username from grafana stack page here>
+      password: <put password from grafana stack page here>
+
+extraConfig: |
+  otelcol.processor.probabilistic_sampler "default" {
+    sampling_percentage = 20
+
+    output {
+      traces = [otelcol.exporter.otlp.traces_service.input]
+    }
+  }
+
+metrics:
+  enabled: true
+  cost:
+    enabled: true
+  kepler:
+    enabled: false
+  node-exporter:
+    enabled: true
+  beyla:
+    enabled: false
+logs:
+  enabled: true
+  pod_logs:
+    enabled: true
+  cluster_events:
+    enabled: true
+traces:
+  enabled: true
+  receiver:
+    transforms:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            # Remove HTTP attributes from Span names to reduce cardinality
+            - replace_pattern(name, "\\?.*", "")
+            - replace_match(name, "GET /api/products/*", "GET /api/products/{productId}")
+receivers:
+  grpc:
+    enabled: true
+  http:
+    enabled: true
+  zipkin:
+    enabled: false
+  grafanaCloudMetrics:
+    enabled: false
+opencost:
+  enabled: true
+  opencost:
+    exporter:
+      defaultClusterId: local_cluster
+    prometheus:
+      external:
+        url: https://prometheus-prod-40-prod-sa-east-1.grafana.net/api/prom
+kube-state-metrics:
+  enabled: true
+prometheus-node-exporter:
+  enabled: true
+prometheus-operator-crds:
+  enabled: true
+kepler:
+  enabled: false
+alloy: 
+  logging: 
+    level: info
+alloy-events: {}
+alloy-logs:
+  logging:
+    level: error
+  alloy:
+    mounts:
+      dockercontainers: true
+beyla:
+  enabled: false
+test:
+  enabled: false

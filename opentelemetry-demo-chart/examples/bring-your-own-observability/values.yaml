@@ -1,0 +1,81 @@
+
+default:
+  envOverrides:
+    - name: OTEL_COLLECTOR_NAME
+      value: alloy-k8s-monitoring.monitoring
+    - name: OTEL_RESOURCE_ATTRIBUTES
+      value: deployment.environment=local
+
+opentelemetry-collector:
+  enabled: false
+
+jaeger:
+  enabled: false
+
+prometheus:
+  enabled: true
+
+grafana:
+  enabled: false
+
+opensearch:
+  enabled: false
+
+components:
+  # frontendProxy:
+  #   ingress:
+  #     enabled: true
+  #     annotations: {}
+  #     hosts:
+  #       - host: otel-demo.my-domain.com
+  #         paths:
+  #           - path: /
+  #             pathType: Prefix
+  #             port: 8080
+  frontend:
+    imageOverride:
+      repository: localhost:63091/frontend
+      tag: local
+      pullPolicy: Always
+    # envOverrides:
+    #   - name: PUBLIC_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+    #     value: http://otel-demo.my-domain.com/otlp-http/v1/traces
+  cartService:
+    imageOverride:
+      repository: localhost:63091/cartservice
+      tag: local
+      pullPolicy: Always
+    resources:
+      limits:
+        cpu: 25m
+        memory: 64Mi
+      requests:
+        cpu: 25m
+        memory: 64Mi
+    hpa:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 2
+      metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 90
+
+  checkoutService:
+    imageOverride:
+      repository: localhost:63091/checkoutservice
+      tag: local
+      pullPolicy: Always
+  flagd:
+      command:
+      - "/flagd-build"
+      - "start"
+      - "--uri"
+      - "file:./etc/flagd/demo.flagd.json"
+      - "--port"
+      - "8013"
+  loadgenerator:
+    enabled: false

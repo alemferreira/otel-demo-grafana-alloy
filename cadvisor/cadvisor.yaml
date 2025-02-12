@@ -1,0 +1,159 @@
+---
+# Source: cadvisor/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: release-name-cadvisor
+  namespace: monitoring
+---
+# Source: cadvisor/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: cadvisor
+  namespace: monitoring
+  labels:
+    app: cadvisor
+    chart: cadvisor-2.3.3
+    release: release-name
+    heritage: Helm
+spec:
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: cadvisor
+  type: ClusterIP
+---
+# Source: cadvisor/templates/daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cadvisor
+  namespace: monitoring
+  annotations:
+    seccomp.security.alpha.kubernetes.io/pod: docker/default
+  labels:
+    app: cadvisor
+    chart: cadvisor-2.3.3
+    release: release-name
+    heritage: Helm
+spec:
+  selector:
+    matchLabels:
+      app: cadvisor
+      release: release-name
+  template:
+    metadata:
+      labels:
+        app: cadvisor
+        release: release-name
+      annotations:
+    spec:
+      
+      
+      serviceAccountName: release-name-cadvisor
+      
+      containers:
+      - name: cadvisor
+        image: "gcr.io/cadvisor/cadvisor:v0.49.1"
+        imagePullPolicy: IfNotPresent
+        args:
+          - --housekeeping_interval=10s
+          - --max_housekeeping_interval=15s
+          - --event_storage_event_limit=default=0
+          - --event_storage_age_limit=default=0
+          - --store_container_labels=false
+          - --disable_metrics=percpu,process,sched,tcp,udp,hugetlb,referenced_memory,cpu_topology,resctrl,cpuset
+          - --whitelisted_container_labels=io.kubernetes.pod.name,io.kubernetes.container.name,io.kubernetes.pod.namespace
+          - --docker_only
+        volumeMounts:
+        - name: rootfs
+          mountPath: /rootfs
+          readOnly: true
+        - name: varrun
+          mountPath: /var/run
+          readOnly: true
+        - name: sys
+          mountPath: /sys
+          readOnly: true
+        - name: docker
+          mountPath: /var/lib/docker
+          readOnly: true
+        - name: disk
+          mountPath: /dev/disk
+          readOnly: true
+        
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 200m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: rootfs
+        hostPath:
+          path: /
+      - name: varrun
+        hostPath:
+          path: /var/run
+      - name: sys
+        hostPath:
+          path: /sys
+      - name: docker
+        hostPath:
+          path: /var/lib/docker
+      - name: disk
+        hostPath:
+          path: /dev/disk
+---
+# Source: cadvisor/templates/servicemonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cadvisor
+  namespace: monitoring
+  labels:
+    app: cadvisor
+    chart: cadvisor-2.3.3
+    release: release-name
+    heritage: Helm
+spec:
+  selector:
+    matchLabels:
+      app: cadvisor
+  namespaceSelector:
+    matchNames:
+      - monitoring
+  endpoints:
+    - path: /metrics
+      interval: 60s
+      scrapeTimeout: 15s
+      port: http
+      metricRelabelings:
+        - sourceLabels:
+          - container_label_io_kubernetes_pod_name
+          targetLabel: pod
+        - sourceLabels:
+          - container_label_io_kubernetes_container_name
+          targetLabel: container
+        - sourceLabels:
+          - container_label_io_kubernetes_pod_namespace
+          targetLabel: namespace
+        - action: labeldrop
+          regex: container_label_.*
+        - action: labeldrop
+          regex: name
+        - action: keep
+          regex: container_cpu_cfs_periods_total|container_cpu_cfs_throttled_periods_total|container_cpu_usage_seconds_total|container_fs_reads_bytes_total|container_fs_reads_total|container_fs_writes_bytes_total|container_fs_writes_total|container_memory_cache|container_memory_rss|container_memory_swap|container_memory_working_set_bytes|container_network_receive_bytes_total|container_network_receive_packets_dropped_total|container_network_receive_packets_total|container_network_transmit_bytes_total|container_network_transmit_packets_dropped_total|container_network_transmit_packets_total|machine_memory_bytes
+          sourceLabels:
+          - __name__
